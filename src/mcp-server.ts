@@ -1,12 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { HttpServerTransport } from '@modelcontextprotocol/sdk/server/http.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { GeminiContextServer } from './gemini-context-server.js';
 import { Logger } from './utils/logger.js';
-import { config } from './config.js';
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'crypto';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -193,7 +193,7 @@ export function loadManifest(): any {
     try {
         const manifestPath = path.resolve(process.cwd(), 'mcp-manifest.json');
         Logger.info(`Looking for manifest at: ${manifestPath}`);
-        
+
         if (fs.existsSync(manifestPath)) {
             Logger.info('Manifest file found');
             const manifestContent = fs.readFileSync(manifestPath, 'utf8');
@@ -225,14 +225,14 @@ export async function startServer() {
 
         // Load manifest
         let manifest = loadManifest();
-        
+
         // If manifest is still not loaded, try alternate locations
         if (!manifest) {
             Logger.info('Attempting to load manifest from absolute path');
             // Try to load from the directory where this file is located
             const dirPath = path.dirname(new URL(import.meta.url).pathname);
             const altPath = path.join(dirPath, '..', 'mcp-manifest.json');
-            
+
             Logger.info(`Trying alternate path: ${altPath}`);
             if (fs.existsSync(altPath)) {
                 try {
@@ -246,7 +246,7 @@ export async function startServer() {
                 Logger.error(`Alternate manifest file not found at: ${altPath}`);
             }
         }
-        
+
         // Create and configure the MCP server
         const server = new McpServer({
             name: 'gemini-context',
@@ -335,8 +335,8 @@ export async function startServer() {
                     tags: z.array(z.string()).optional().describe('Tags for context categorization')
                 }).optional().describe('Metadata for context tracking')
             },
-            async (args: { 
-                content: string; 
+            async (args: {
+                content: string;
                 role: 'user' | 'assistant' | 'system';
                 metadata?: {
                     topic?: string;
@@ -392,8 +392,8 @@ export async function startServer() {
             async (args: { displayName: string; content: string; ttlSeconds?: number }, extra: RequestHandlerExtra) => {
                 try {
                     const cacheName = await geminiServer.createCache(
-                        args.displayName, 
-                        args.content, 
+                        args.displayName,
+                        args.content,
                         args.ttlSeconds
                     );
                     return {
@@ -525,7 +525,7 @@ export async function startServer() {
                             };
                         }
                     }
-                    
+
                     return {
                         content: [{
                             type: 'text',
@@ -555,7 +555,7 @@ export async function startServer() {
             async (args: { toolName: string }) => {
                 try {
                     const manifestToUse = manifest || FALLBACK_MANIFEST;
-                    
+
                     if (!manifestToUse || !manifestToUse.tools) {
                         return {
                             content: [{
@@ -566,7 +566,7 @@ export async function startServer() {
                     }
 
                     const toolInfo = manifestToUse.tools.find((tool: any) => tool.name === args.toolName);
-                    
+
                     if (!toolInfo) {
                         return {
                             content: [{
@@ -593,13 +593,9 @@ export async function startServer() {
         let transport;
         if (httpMode) {
             Logger.info(`Starting in HTTP mode on port ${port}`);
-            transport = new HttpServerTransport({
-                port: port,
-                cors: {
-                    origin: "*",
-                    methods: ["GET", "POST", "OPTIONS"],
-                    allowedHeaders: ["Content-Type"]
-                }
+            transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: () => randomUUID(),
+                enableJsonResponse: false
             });
             
             // Log server URL
@@ -609,7 +605,7 @@ export async function startServer() {
             Logger.info('Starting in stdio mode');
             transport = new StdioServerTransport();
         }
-        
+
         await server.connect(transport);
 
         // Handle cleanup
