@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ogoldberg-gemini-context-mcp-server-badge.png)](https://mseep.ai/app/ogoldberg-gemini-context-mcp-server)
+
 # Gemini Context MCP Server
 
 A powerful MCP (Model Context Protocol) server implementation that leverages Gemini's capabilities for context management and caching. This server maximizes the value of Gemini's 2M token context window while providing tools for efficient caching of large contexts.
